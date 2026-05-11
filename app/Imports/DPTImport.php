@@ -12,8 +12,9 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 
-class DPTImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailure, SkipsEmptyRows, WithBatchInserts
+class DPTImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailure, SkipsEmptyRows, WithBatchInserts, WithChunkReading
 {
     use \Maatwebsite\Excel\Concerns\SkipsFailures;
 
@@ -23,6 +24,9 @@ class DPTImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailu
     public function __construct(Election $election)
     {
         $this->election = $election;
+
+        // Extend time limit for large imports (bcrypt is slow)
+        set_time_limit(300);
     }
 
     /**
@@ -53,7 +57,7 @@ class DPTImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailu
         $user = User::create([
             'username' => $username,
             'name' => trim($row['nama'] ?? ''),
-            'password' => Hash::make($password),
+            'password' => Hash::make($password, ['rounds' => 10]),
             'angkatan' => trim($row['angkatan'] ?? ''),
             'gender' => $genderValue,
             'has_voted' => false,
@@ -108,7 +112,15 @@ class DPTImport implements ToModel, WithHeadingRow, WithValidation, SkipsOnFailu
      */
     public function batchSize(): int
     {
-        return 100;
+        return 50;
+    }
+
+    /**
+     * Chunk size for reading (reduces memory usage).
+     */
+    public function chunkSize(): int
+    {
+        return 50;
     }
 
     /**
